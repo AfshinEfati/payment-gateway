@@ -1,38 +1,39 @@
 {
-    "name": "efati/payment-gateway",
-    "description": "A reusable, multi-gateway Laravel payment package.",
-    "type": "library",
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "Afshin Efati",
-            "email": "afshin.efati@gmail.com"
-        }
-    ],
-     "homepage": "https://github.com/AfshinEfati/payment-gateway",
+  "name": "efati/payment-gateway",
+  "description": "A reusable, multi-gateway Laravel payment package.",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Afshin Efati",
+      "email": "afshin.efati@gmail.com"
+    }
+  ],
+  "homepage": "https://github.com/AfshinEfati/payment-gateway",
   "support": {
     "issues": "https://github.com/AfshinEfati/payment-gateway/issues",
     "source": "https://github.com/AfshinEfati/payment-gateway"
   },
-    "require": {
-        "php": "^8.2",
-        "illuminate/support": "^11.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "PaymentGateway\\": "src/"
-        }
-    },
-    "extra": {
-        "laravel": {
-            "providers": [
-                "PaymentGateway\\PaymentServiceProvider"
-            ],
-            "aliases": {
-                "Payment": "PaymentGateway\\Facades\\Payment"
-            }
-        }
-    },
-    "minimum-stability": "stable",
-    "prefer-stable": true
+  "require": {
+    "php": "^8.2",
+    "illuminate/support": "^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "PaymentGateway\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "PaymentGateway\\PaymentServiceProvider"
+      ],
+      "aliases": {
+        "Payment": "PaymentGateway\\Facades\\Payment",
+        "name": "efati/payment-gateway"
+      }
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
 }

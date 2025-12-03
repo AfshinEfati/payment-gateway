@@ -40,19 +40,19 @@ class PaymentServiceProvider extends ServiceProvider
     {
         $this->publishes([
             __DIR__ . '/../config/payment.php' => config_path('payment.php'),
-        ], 'payment-config');
+        ], 'efati-payment-config');
 
         $this->publishes([
             __DIR__ . '/../database/migrations/' => database_path('migrations'),
-        ], 'payment-migrations');
+        ], 'efati-payment-migrations');
 
         $this->publishes([
             __DIR__ . '/../database/seeders/' => database_path('seeders'),
-        ], 'payment-seeders');
+        ], 'efati-payment-seeders');
 
         $this->publishes([
             __DIR__ . '/Models' => app_path('Models'),
-        ], 'payment-models');
+        ], 'efati-payment-models');
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
     }

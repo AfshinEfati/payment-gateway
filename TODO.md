@@ -6,18 +6,19 @@ This document outlines the complete TODO list for building a reusable, multi-gat
 
 ## 1. Package Structure Setup
 
-- Add base files:
-  - `composer.json`
-  - `src/`
-  - `src/PaymentServiceProvider.php`
-  - `config/payment.php`
-  - `database/migrations/`
-  - `database/seeders/`
-  - `routes/payment.php` (optional)
+- [x] Add base files:
+  - [x] `composer.json`
+  - [x] `src/`
+  - [x] `src/PaymentServiceProvider.php`
+  - [x] `config/payment.php`
+  - [x] `database/migrations/`
+  - [x] `database/seeders/`
+  - [ ] `routes/payment.php` (optional)
 
 ---
 
 ## 2. Define Package Folder Architecture
+
 ```
 src/
   Contracts/
@@ -32,16 +33,17 @@ database/
   seeders/
 ```
 
-- `Contracts/PaymentGatewayInterface.php`
-- `Gateways/ProviderName.php` (e.g. Zarinpal, Mellat, IdPay, etc.)
-- `DTOs/PaymentRequestDTO.php`
-- `DTOs/PaymentVerifyDTO.php`
-- `Exceptions/PaymentException.php`
-- `Managers/PaymentManager.php`
+- [x] `Contracts/PaymentGatewayInterface.php`
+- [x] `Gateways/ProviderName.php` (e.g. Zarinpal, Mellat, IdPay, etc.)
+- [x] `DTOs/PaymentRequestDTO.php`
+- [x] `DTOs/PaymentVerifyDTO.php`
+- [x] `Exceptions/PaymentException.php`
+- [x] `Managers/PaymentManager.php`
 
 ---
 
 ## 3. Define Gateway Interface
+
 The `PaymentGatewayInterface` must define:
 
 - `initialize(PaymentRequestDTO $dto): PaymentInitResult`
@@ -50,22 +52,24 @@ The `PaymentGatewayInterface` must define:
 - `getTrackingCode(): string|null`
 - `getRawResponse(): array|null`
 
-All gateway adapters must implement this interface.
+All gateway adapters must implement this interface. [x]
 
 ---
 
 ## 4. Implement PaymentManager
-- Read default gateway from config
-- Allow dynamic gateway selection (`setGateway('zarinpal')`)
-- Resolve gateway drivers via container bindings
-- Execute initialization and verification operations
-- Normalize exceptions to `PaymentException`
+
+- [x] Read default gateway from config
+- [x] Allow dynamic gateway selection (`setGateway('zarinpal')`)
+- [x] Resolve gateway drivers via container bindings
+- [x] Execute initialization and verification operations
+- [x] Normalize exceptions to `PaymentException`
 
 ---
 
 ## 5. Create `config/payment.php`
-- Default gateway configuration
-- Define each provider:
+
+- [x] Default gateway configuration
+- [x] Define each provider:
   ```
   'zarinpal' => [
       'merchant_id' => env('ZARINPAL_MID'),
@@ -73,19 +77,22 @@ All gateway adapters must implement this interface.
       'sandbox' => false,
   ],
   ```
-- Global settings (timeout, logging, retry, etc.)
+- [x] Global settings (timeout, logging, retry, etc.)
 
 ---
 
 ## 6. Database Structure
-### Table: `banks`
+
+### Table: `banks` [x]
+
 - id
 - name_en
 - name_fa
 - code
 - logo_url
 
-### Table: `payment_gateways`
+### Table: `payment_gateways` [x]
+
 - id
 - bank_id (FK)
 - name_en
@@ -94,7 +101,8 @@ All gateway adapters must implement this interface.
 - is_active
 - config (json)
 
-### Table: `payment_transactions`
+### Table: `payment_transactions` [x]
+
 - id
 - gateway_id
 - order_id
@@ -110,8 +118,11 @@ All gateway adapters must implement this interface.
 ---
 
 ## 7. Seeders
-### Bank Seeder
+
+### Bank Seeder [x]
+
 Populate all major Iranian banks:
+
 - Mellat
 - Saman
 - Pasargad
@@ -121,7 +132,8 @@ Populate all major Iranian banks:
 - Melli
 - Others
 
-### Gateway Seeder
+### Gateway Seeder [x]
+
 - Zarinpal
 - IdPay
 - NextPay
@@ -133,23 +145,26 @@ Populate all major Iranian banks:
 ---
 
 ## 8. Implement Gateway Adapters
+
 For each provider:
-- Create gateway class
-- Map provider request input fields
-- Implement `initialize()` → returns payment URL or redirect token
-- Implement `verify()` → returns status, refId, trackingCode
-- Handle provider-specific error codes
-- Normalize error handling into `PaymentException`
+
+- [x] Create gateway class
+- [x] Map provider request input fields
+- [x] Implement `initialize()` → returns payment URL or redirect token
+- [x] Implement `verify()` → returns status, refId, trackingCode
+- [x] Handle provider-specific error codes
+- [x] Normalize error handling into `PaymentException`
 
 ---
 
 ## 9. Service Provider
-- Register package config via `mergeConfigFrom`
-- Publish:
-  - config
-  - migrations
-  - seeders
-- Bind all gateway drivers:
+
+- [x] Register package config via `mergeConfigFrom`
+- [x] Publish:
+  - [x] config
+  - [x] migrations
+  - [x] seeders
+- [x] Bind all gateway drivers:
   ```
   $this->app->bind('payment.zarinpal', Zarinpal::class);
   ```
@@ -157,7 +172,9 @@ For each provider:
 ---
 
 ## 10. (Optional) Facade
-Supports:
+
+Supports: [x]
+
 ```php
 Payment::gateway('zarinpal')->initialize($dto);
 ```
@@ -165,6 +182,7 @@ Payment::gateway('zarinpal')->initialize($dto);
 ---
 
 ## 11. Testing (Optional)
+
 - Mock provider initialization
 - Test verification flow
 - Test failure scenarios
@@ -174,30 +192,36 @@ Payment::gateway('zarinpal')->initialize($dto);
 ---
 
 ## 12. Usage in External Projects
+
 After publishing and installing:
 
 ### Install:
+
 ```
 composer require vendor/payment-gateway
 ```
 
 ### Publish:
+
 ```
 php artisan vendor:publish --tag=payment-config
 php artisan vendor:publish --tag=payment-migrations
 ```
 
 ### Migrate:
+
 ```
 php artisan migrate
 ```
 
 ### Seed:
+
 ```
 php artisan db:seed --class=PaymentGatewaySeeder
 ```
 
 ### Example usage:
+
 ```php
 $result = Payment::gateway('zarinpal')->initialize(
     new PaymentRequestDTO(
@@ -211,4 +235,5 @@ $result = Payment::gateway('zarinpal')->initialize(
 ---
 
 ## Completion
+
 This checklist describes every step required to build a reusable, clean, maintainable, production-ready Laravel payment package.

@@ -49,7 +49,7 @@ class PaymentManager
     }
 
     /**
-     * Dynamically call the default driver instance.
+     * Dynamically call the default driver instance or resolve a gateway.
      *
      * @param  string  $method
      * @param  array  $parameters
@@ -57,6 +57,11 @@ class PaymentManager
      */
     public function __call($method, $parameters)
     {
+        // Check if the method name corresponds to a registered gateway config
+        if ($this->app['config']["payment.gateways.{$method}"]) {
+            return $this->gateway($method);
+        }
+
         return $this->gateway()->$method(...$parameters);
     }
 }
