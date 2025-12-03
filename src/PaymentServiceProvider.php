@@ -42,8 +42,8 @@ class PaymentServiceProvider extends ServiceProvider
 
         // Bind Manager
         $this->app->singleton('payment', function ($app) {
-            if (class_exists(\App\Payment\Managers\PaymentManager::class)) {
-                return new \App\Payment\Managers\PaymentManager($app);
+            if (class_exists(\App\Payment\PaymentManager::class)) {
+                return new \App\Payment\PaymentManager($app);
             }
             return new \PaymentGateway\Managers\PaymentManager($app);
         });

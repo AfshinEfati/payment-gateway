@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
-use App\Payment\Exceptions\PaymentException;
+use App\Payment\PaymentException;
 
 class Zarinpal implements PaymentGatewayInterface
 {

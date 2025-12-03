@@ -5,7 +5,7 @@ namespace App\Payment\Gateways;
 use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
-use App\Payment\Exceptions\PaymentException;
+use App\Payment\PaymentException;
 use SoapClient;
 
 class Mellat implements PaymentGatewayInterface

@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Payment\Managers;
+namespace App\Payment;
 
 use Illuminate\Contracts\Foundation\Application;
 use App\Payment\Contracts\PaymentGatewayInterface;
-use App\Payment\Exceptions\PaymentException;
+use App\Payment\PaymentException;
 
 class PaymentManager
 {
