@@ -18,15 +18,33 @@ class PaymentServiceProvider extends ServiceProvider
             'payment'
         );
 
+        // Register Command
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \PaymentGateway\Console\Commands\InstallPackage::class,
+            ]);
+        }
+
+        // Bind Gateways
         $this->app->bind('payment.zarinpal', function ($app) {
+            if (class_exists(\App\Payment\Gateways\Zarinpal::class)) {
+                return new \App\Payment\Gateways\Zarinpal($app['config']['payment.gateways.zarinpal']);
+            }
             return new \PaymentGateway\Gateways\Zarinpal($app['config']['payment.gateways.zarinpal']);
         });
 
         $this->app->bind('payment.mellat', function ($app) {
+            if (class_exists(\App\Payment\Gateways\Mellat::class)) {
+                return new \App\Payment\Gateways\Mellat($app['config']['payment.gateways.mellat']);
+            }
             return new \PaymentGateway\Gateways\Mellat($app['config']['payment.gateways.mellat']);
         });
 
+        // Bind Manager
         $this->app->singleton('payment', function ($app) {
+            if (class_exists(\App\Payment\Managers\PaymentManager::class)) {
+                return new \App\Payment\Managers\PaymentManager($app);
+            }
             return new \PaymentGateway\Managers\PaymentManager($app);
         });
     }

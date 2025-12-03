@@ -25,18 +25,19 @@ composer require efati/payment-gateway
 
 ## Configuration
 
-Publish the configuration file, migrations, and seeders:
+Run the installation command to publish the config, migrations, seeders, models, and core logic:
 
 ```bash
-# Publish Config
-php artisan vendor:publish --tag=efati-payment-config
-
-# Publish Migrations
-php artisan vendor:publish --tag=efati-payment-migrations
-
-# Publish Seeders
-php artisan vendor:publish --tag=efati-payment-seeders
+php artisan payment:install
 ```
+
+This command will:
+
+1. Publish configuration to `config/payment.php`
+2. Publish migrations to `database/migrations`
+3. Publish seeders to `database/seeders`
+4. Publish models to `app/Models`
+5. **Scaffold Core Logic**: Copy Contracts, Gateways, DTOs, and Managers to `app/Payment/`
 
 Run migrations:
 
@@ -55,14 +56,17 @@ php artisan db:seed --class=PaymentGateway\Database\Seeders\GatewaySeeder
 
 ### Basic Usage
 
-Use the `Payment` facade to initialize a payment with the default gateway (defined in `config/payment.php`):
+The core logic is now located in `app/Payment`. You can customize any part of it.
+
+Use the `Payment` facade to initialize a payment:
 
 ```php
+use App\Payment\Managers\PaymentManager; // Or use Facade
 use PaymentGateway\Facades\Payment;
-use PaymentGateway\DTOs\PaymentRequestDTO;
+use App\Payment\DTOs\PaymentRequestDTO;
 
 $dto = new PaymentRequestDTO(
-    amount: 10000, // Amount in Rials (Integer)
+    amount: 10000,
     orderId: 'ORD-123',
     callbackUrl: route('payment.callback'),
     description: 'Order payment',
@@ -70,25 +74,24 @@ $dto = new PaymentRequestDTO(
 );
 
 $result = Payment::initialize($dto);
-
-// Redirect user to bank
-return redirect($result['url']);
 ```
 
 ### Dynamic Gateway Selection
 
-You can choose a specific gateway at runtime:
-
 ```php
 // Use Zarinpal
 Payment::zarinpal()->initialize($dto);
-
-// Use Mellat
-Payment::mellat()->initialize($dto);
-
-// Use by name string
-Payment::gateway('zarinpal')->initialize($dto);
 ```
+
+### Customization
+
+Since the code is in `app/Payment`, you can directly edit:
+
+- `app/Payment/Gateways/Zarinpal.php`
+- `app/Payment/Managers/PaymentManager.php`
+- `app/Payment/DTOs/PaymentRequestDTO.php`
+
+The package automatically detects if these files exist in `app/Payment` and uses them instead of the package defaults.
 
 ### Verification
 
