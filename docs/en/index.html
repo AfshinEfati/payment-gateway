@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Laravel Payment Gateway - Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+      hljs.highlightAll();
+    </script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                200: "#bfdbfe",
+                300: "#93c5fd",
+                400: "#60a5fa",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+                800: "#1e40af",
+                900: "#1e3a8a",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-200 font-sans antialiased transition-colors duration-300"
+  >
+    <!-- Navbar -->
+    <nav
+      class="fixed top-0 z-50 w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+    >
+      <div class="px-3 py-3 lg:px-5 lg:pl-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center justify-start">
+            <button
+              data-drawer-target="logo-sidebar"
+              data-drawer-toggle="logo-sidebar"
+              aria-controls="logo-sidebar"
+              type="button"
+              class="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+            >
+              <span class="sr-only">Open sidebar</span>
+              <svg
+                class="w-6 h-6"
+                aria-hidden="true"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  clip-rule="evenodd"
+                  fill-rule="evenodd"
+                  d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"
+                ></path>
+              </svg>
+            </button>
+            <a href="#" class="flex ml-2 md:mr-24">
+              <span
+                class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white text-primary-600"
+                >Payment Gateway</span
+              >
+            </a>
+          </div>
+          <div class="flex items-center">
+            <!-- Language Switcher -->
+            <a
+              href="../fa/index.html"
+              class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 mr-2"
+            >
+              FA
+            </a>
+            <!-- Dark Mode Toggle -->
+            <button
+              id="theme-toggle"
+              type="button"
+              class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5"
+            >
+              <svg
+                id="theme-toggle-dark-icon"
+                class="hidden w-5 h-5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"
+                ></path>
+              </svg>
+              <svg
+                id="theme-toggle-light-icon"
+                class="hidden w-5 h-5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside
+      id="logo-sidebar"
+      class="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform -translate-x-full bg-white border-r border-gray-200 sm:translate-x-0 dark:bg-gray-800 dark:border-gray-700"
+      aria-label="Sidebar"
+    >
+      <div class="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
+        <ul class="space-y-2 font-medium">
+          <li>
+            <a
+              href="#introduction"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Introduction</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#installation"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Installation</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#configuration"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Configuration</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#usage"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Usage</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#transaction-persistence"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Transactions</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="#customization"
+              class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+            >
+              <span class="ml-3">Customization</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <div class="p-4 sm:ml-64 pt-20">
+      <div
+        class="p-4 border-2 border-gray-200 border-dashed rounded-lg dark:border-gray-700 max-w-4xl mx-auto"
+      >
+        <!-- Introduction -->
+        <section id="introduction" class="mb-12">
+          <h1
+            class="text-4xl font-bold mb-4 text-primary-600 dark:text-primary-400"
+          >
+            Laravel Payment Gateway
+          </h1>
+          <p class="text-lg mb-4">
+            A reusable, multi-gateway Laravel payment package supporting Iranian
+            banking system. Designed for flexibility and ease of use.
+          </p>
+          <div
+            class="p-4 mb-4 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-gray-800 dark:text-blue-400"
+            role="alert"
+          >
+            <span class="font-medium">Requirements:</span> PHP ^8.2, Laravel
+            ^11.0 | ^12.0
+          </div>
+        </section>
+
+        <!-- Installation -->
+        <section id="installation" class="mb-12">
+          <h2 class="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
+            Installation
+          </h2>
+          <p class="mb-4">Install the package via composer:</p>
+          <pre
+            class="mb-4"
+          ><code class="language-bash rounded-lg">composer require efati/payment-gateway</code></pre>
+
+          <p class="mb-4">
+            Then run the installation command to scaffold the package:
+          </p>
+          <pre
+            class="mb-4"
+          ><code class="language-bash rounded-lg">php artisan payment:install</code></pre>
+
+          <p class="mb-4">
+            This command will publish config, migrations, seeders, models, and
+            <strong>core logic</strong> to your application.
+          </p>
+
+          <p class="mb-4">Finally, run migrations and seeders:</p>
+          <pre
+            class="mb-4"
+          ><code class="language-bash rounded-lg">php artisan migrate
+php artisan db:seed --class=PaymentGateway\Database\Seeders\BankSeeder
+php artisan db:seed --class=PaymentGateway\Database\Seeders\GatewaySeeder</code></pre>
+        </section>
+
+        <!-- Configuration -->
+        <section id="configuration" class="mb-12">
+          <h2 class="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
+            Configuration
+          </h2>
+          <p class="mb-4">
+            The configuration file is located at
+            <code>config/payment.php</code>. You can set your gateway
+            credentials in your <code>.env</code> file:
+          </p>
+          <pre
+            class="mb-4"
+          ><code class="language-bash rounded-lg">ZARINPAL_MERCHANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+MELLAT_TERMINAL_ID=xxxxxxx
+MELLAT_USERNAME=xxxxxxx
+MELLAT_PASSWORD=xxxxxxx</code></pre>
+        </section>
+
+        <!-- Usage -->
+        <section id="usage" class="mb-12">
+          <h2 class="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
+            Usage
+          </h2>
+
+          <h3 class="text-2xl font-semibold mb-2 mt-6">Initialization</h3>
+          <pre
+            class="mb-4"
+          ><code class="language-php rounded-lg">use PaymentGateway\Facades\Payment;
+use App\Payment\DTOs\PaymentRequestDTO;
+
+$dto = new PaymentRequestDTO(
+    amount: 10000,
+    orderId: 'ORD-123',
+    callbackUrl: route('payment.callback'),
+    description: 'Order payment',
+    mobile: '09123456789'
+);
+
+// Use Default Gateway
+$result = Payment::initialize($dto);
+
+// Use Specific Gateway
+$result = Payment::zarinpal()->initialize($dto);
+
+return redirect($result['url']);</code></pre>
+
+          <h3 class="text-2xl font-semibold mb-2 mt-6">Verification</h3>
+          <pre
+            class="mb-4"
+          ><code class="language-php rounded-lg">use PaymentGateway\Facades\Payment;
+use App\Payment\DTOs\PaymentVerifyDTO;
+
+$dto = new PaymentVerifyDTO(
+    amount: 10000,
+    authority: request('Authority'),
+    gateway: 'zarinpal'
+);
+
+try {
+    $receipt = Payment::verify($dto);
+    return "Success! Ref ID: " . $receipt['ref_id'];
+} catch (\Exception $e) {
+    return "Failed: " . $e->getMessage();
+}</code></pre>
+        </section>
+
+        <!-- Transaction Persistence -->
+        <section id="transaction-persistence" class="mb-12">
+          <h2 class="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
+            Transaction Persistence
+          </h2>
+          <p class="mb-4">
+            The package automatically handles transaction logging in the
+            database.
+          </p>
+          <ul class="list-disc list-inside space-y-2 mb-4">
+            <li>
+              <strong>Initialize:</strong> Creates a transaction with status
+              <code>pending</code>.
+            </li>
+            <li>
+              <strong>Verify:</strong> Updates the transaction status to
+              <code>success</code> or <code>failed</code> and records the
+              reference ID.
+            </li>
+          </ul>
+          <p>
+            You can access transactions via the
+            <code>PaymentTransaction</code> model (published to
+            <code>app/Models</code>).
+          </p>
+        </section>
+
+        <!-- Customization -->
+        <section id="customization" class="mb-12">
+          <h2 class="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
+            Customization
+          </h2>
+          <p class="mb-4">
+            The core logic is published to <code>app/Payment/</code>. You can
+            modify any file in this directory to change the behavior of the
+            package.
+          </p>
+          <ul class="list-disc list-inside space-y-2">
+            <li>
+              <code>app/Payment/PaymentManager.php</code>: Main entry point.
+            </li>
+            <li>
+              <code>app/Payment/Gateways/</code>: Gateway implementations.
+            </li>
+            <li><code>app/Payment/DTOs/</code>: Data Transfer Objects.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      // Dark Mode Logic
+      var themeToggleDarkIcon = document.getElementById(
+        "theme-toggle-dark-icon"
+      );
+      var themeToggleLightIcon = document.getElementById(
+        "theme-toggle-light-icon"
+      );
+
+      // Change the icons inside the button based on previous settings
+      if (
+        localStorage.getItem("color-theme") === "dark" ||
+        (!("color-theme" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        themeToggleLightIcon.classList.remove("hidden");
+        document.documentElement.classList.add("dark");
+      } else {
+        themeToggleDarkIcon.classList.remove("hidden");
+        document.documentElement.classList.remove("dark");
+      }
+
+      var themeToggleBtn = document.getElementById("theme-toggle");
+
+      themeToggleBtn.addEventListener("click", function () {
+        themeToggleDarkIcon.classList.toggle("hidden");
+        themeToggleLightIcon.classList.toggle("hidden");
+
+        if (localStorage.getItem("color-theme")) {
+          if (localStorage.getItem("color-theme") === "light") {
+            document.documentElement.classList.add("dark");
+            localStorage.setItem("color-theme", "dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+            localStorage.setItem("color-theme", "light");
+          }
+        } else {
+          if (document.documentElement.classList.contains("dark")) {
+            document.documentElement.classList.remove("dark");
+            localStorage.setItem("color-theme", "light");
+          } else {
+            document.documentElement.classList.add("dark");
+            localStorage.setItem("color-theme", "dark");
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
