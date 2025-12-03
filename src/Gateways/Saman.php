@@ -54,9 +54,10 @@ class Saman implements PaymentGatewayInterface
     public function verify(PaymentVerifyDTO $dto): array
     {
         // Saman verification via SOAP
-        $url = 'https://sep.shaparak.ir/Payments/ReferencePayment.asmx?WSDL';
+        $url = 'https://sep.shaparak.ir/Payments/ReferencePayment.asmx';
+        $action = 'http://sep.shaparak.ir/payments/VerifyTransaction';
 
-        $soapRequest = '<?xml version="1.0" encoding="utf-8"?>
+        $xml = '<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
     <VerifyTransaction xmlns="http://sep.shaparak.ir/payments">
@@ -66,30 +67,44 @@ class Saman implements PaymentGatewayInterface
   </soap:Body>
 </soap:Envelope>';
 
-        $response = Http::withHeaders([
-            'Content-Type' => 'text/xml; charset=utf-8',
-            'SOAPAction' => 'http://sep.shaparak.ir/payments/VerifyTransaction',
-        ])->send('POST', $url, ['body' => $soapRequest]);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'text/xml; charset=utf-8',
+                'SOAPAction' => $action,
+            ])->send('POST', $url, ['body' => $xml]);
 
-        // Parse SOAP response
-        $xml = simplexml_load_string($response->body());
-        $xml->registerXPathNamespace('soap', 'http://schemas.xmlsoap.org/soap/envelope/');
-        $result = $xml->xpath('//soap:Body')[0];
+            if ($response->failed()) {
+                throw new PaymentException("Saman Verification Connection Error: " . $response->body());
+            }
 
-        $verifyResult = (float)$result->VerifyTransactionResponse->VerifyTransactionResult ?? -1;
+            $responseBody = $response->body();
+            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+            $xmlObj = simplexml_load_string($cleanXml);
+            
+            $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
 
-        $this->rawResponse = ['verify_result' => $verifyResult];
+            if ($result === null) {
+                 throw new PaymentException("Saman: Invalid verification response.");
+            }
 
-        // Positive values mean success and represent the amount
-        if ($verifyResult <= 0) {
-            throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
+            $verifyResult = (float)$result;
+
+            $this->rawResponse = ['verify_result' => $verifyResult];
+
+            // Positive values mean success and represent the amount
+            if ($verifyResult <= 0) {
+                throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
+            }
+
+            return [
+                'status' => 'success',
+                'ref_id' => $dto->authority,
+                'tracking_code' => $dto->authority,
+            ];
+
+        } catch (\Exception $e) {
+            throw new PaymentException("Saman Verification Error: " . $e->getMessage());
         }
-
-        return [
-            'status' => 'success',
-            'ref_id' => $dto->authority,
-            'tracking_code' => $dto->authority,
-        ];
     }
 
     public function getTransactionId(): ?string

@@ -2,11 +2,11 @@
 
 namespace PaymentGateway\Gateways;
 
+use Illuminate\Support\Facades\Http;
 use PaymentGateway\Contracts\PaymentGatewayInterface;
 use PaymentGateway\DTOs\PaymentRequestDTO;
 use PaymentGateway\DTOs\PaymentVerifyDTO;
 use PaymentGateway\Exceptions\PaymentException;
-use SoapClient;
 
 class Sadad implements PaymentGatewayInterface
 {
@@ -20,78 +20,131 @@ class Sadad implements PaymentGatewayInterface
 
     public function initialize(PaymentRequestDTO $dto): array
     {
+        $url = 'https://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest.asmx';
+        $action = 'http://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest';
+
+        $signData = $this->config['terminal_id'] . ';' . $dto->orderId . ';' . $dto->amount;
+        $signature = $this->generateSignature($signData);
+        $localDateTime = date('m/d/Y g:i:s a');
+
+        $xml = '<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <PaymentRequest xmlns="http://sadad.shaparak.ir/vpg/api/v0/Request">
+      <PaymentRequestModel>
+        <MerchantId>' . $this->config['merchant_id'] . '</MerchantId>
+        <TerminalId>' . $this->config['terminal_id'] . '</TerminalId>
+        <Amount>' . $dto->amount . '</Amount>
+        <OrderId>' . $dto->orderId . '</OrderId>
+        <LocalDateTime>' . $localDateTime . '</LocalDateTime>
+        <ReturnUrl>' . $dto->callbackUrl . '</ReturnUrl>
+        <SignData>' . $signature . '</SignData>
+        <AdditionalData>' . ($dto->description ?? '') . '</AdditionalData>
+        <UserId>0</UserId>
+        <ApplicationName>' . ($this->config['application_name'] ?? 'Payment') . '</ApplicationName>
+      </PaymentRequestModel>
+    </PaymentRequest>
+  </soap:Body>
+</soap:Envelope>';
+
         try {
-            $client = new SoapClient('https://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest.asmx?WSDL');
+            $response = Http::withHeaders([
+                'Content-Type' => 'text/xml; charset=utf-8',
+                'SOAPAction' => $action,
+            ])->send('POST', $url, ['body' => $xml]);
 
-            // Create signature (simplified - real implementation needs proper signing)
-            $signData = $this->config['terminal_id'] . ';' . $dto->orderId . ';' . $dto->amount;
-
-            $response = $client->PaymentRequest([
-                'requestData' => [
-                    'MerchantId' => $this->config['merchant_id'],
-                    'TerminalId' => $this->config['terminal_id'],
-                    'Amount' => $dto->amount,
-                    'OrderId' => $dto->orderId,
-                    'LocalDateTime' => date('m/d/Y g:i:s a'),
-                    'ReturnUrl' => $dto->callbackUrl,
-                    'SignData' => $this->generateSignature($signData),
-                    'AdditionalData' => $dto->description ?? '',
-                    'UserId' => 0,
-                    'ApplicationName' => $this->config['application_name'] ?? 'Payment',
-                ]
-            ]);
-
-            $result = $response->PaymentRequestResult;
-
-            if ($result->ResCode != 0) {
-                throw new PaymentException("Sadad initialization failed: " . $result->Description);
+            if ($response->failed()) {
+                throw new PaymentException("Sadad Connection Error: " . $response->body());
             }
 
-            $token = $result->Token;
+            $responseBody = $response->body();
+            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+            $xmlObj = simplexml_load_string($cleanXml);
+            
+            $result = $xmlObj->Body->PaymentRequestResponse->PaymentRequestResult ?? null;
+
+            if (!$result) {
+                 throw new PaymentException("Sadad: Invalid response structure.");
+            }
+
+            $resCode = (int)$result->ResCode;
+            $token = (string)$result->Token;
+            $description = (string)$result->Description;
+
+            if ($resCode != 0) {
+                throw new PaymentException("Sadad initialization failed: " . $description);
+            }
 
             return [
                 'url' => 'https://sadad.shaparak.ir/VPG/Purchase?token=' . $token,
                 'token' => $token,
             ];
+
         } catch (\Exception $e) {
-            throw new PaymentException("Sadad Connection Error: " . $e->getMessage());
+            throw new PaymentException("Sadad Error: " . $e->getMessage());
         }
     }
 
     public function verify(PaymentVerifyDTO $dto): array
     {
+        $url = 'https://sadad.shaparak.ir/vpg/api/v0/Advice/Verify.asmx';
+        $action = 'http://sadad.shaparak.ir/vpg/api/v0/Advice/VerifyTransaction';
+
+        $signData = $dto->authority;
+        $signature = $this->generateSignature($signData);
+
+        $xml = '<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <VerifyTransaction xmlns="http://sadad.shaparak.ir/vpg/api/v0/Advice">
+      <VerifyTransactionModel>
+        <Token>' . $dto->authority . '</Token>
+        <SignData>' . $signature . '</SignData>
+      </VerifyTransactionModel>
+    </VerifyTransaction>
+  </soap:Body>
+</soap:Envelope>';
+
         try {
-            $client = new SoapClient('https://sadad.shaparak.ir/vpg/api/v0/Advice/Verify.asmx?WSDL');
+            $response = Http::withHeaders([
+                'Content-Type' => 'text/xml; charset=utf-8',
+                'SOAPAction' => $action,
+            ])->send('POST', $url, ['body' => $xml]);
 
-            $signData = $dto->authority;
+            if ($response->failed()) {
+                throw new PaymentException("Sadad Verification Connection Error: " . $response->body());
+            }
 
-            $response = $client->VerifyTransaction([
-                'verifyData' => [
-                    'Token' => $dto->authority,
-                    'SignData' => $this->generateSignature($signData),
-                ]
-            ]);
+            $responseBody = $response->body();
+            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+            $xmlObj = simplexml_load_string($cleanXml);
+            
+            $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
 
-            $result = $response->VerifyTransactionResult;
+            if (!$result) {
+                 throw new PaymentException("Sadad: Invalid verification response.");
+            }
 
-            if ($result->ResCode != 0) {
-                throw new PaymentException("Sadad Verification Error: " . $result->Description);
+            $resCode = (int)$result->ResCode;
+            $description = (string)$result->Description;
+
+            if ($resCode != 0) {
+                throw new PaymentException("Sadad Verification Error: " . $description);
             }
 
             return [
                 'status' => 'success',
-                'ref_id' => $result->RetrivalRefNo ?? $dto->authority,
-                'tracking_code' => $result->SystemTraceNo ?? $dto->authority,
+                'ref_id' => (string)$result->RetrivalRefNo ?? $dto->authority,
+                'tracking_code' => (string)$result->SystemTraceNo ?? $dto->authority,
             ];
+
         } catch (\Exception $e) {
-            throw new PaymentException("Sadad Connection Error: " . $e->getMessage());
+            throw new PaymentException("Sadad Verification Error: " . $e->getMessage());
         }
     }
 
     protected function generateSignature($data)
     {
-        // Simplified signature - real implementation needs proper cryptographic signing with merchant key
-        // This is a placeholder - users should implement based on Sadad documentation
         $key = $this->config['merchant_key'];
         return base64_encode(hash_hmac('sha256', $data, $key, true));
     }

@@ -6,6 +6,9 @@ use Illuminate\Contracts\Foundation\Application;
 use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\PaymentException;
 
+class PaymentManager
+{
+    protected $app;
     protected $driverName;
 
     public function __construct(Application $app)
