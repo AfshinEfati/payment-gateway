@@ -50,6 +50,10 @@ class PaymentServiceProvider extends ServiceProvider
             __DIR__ . '/../database/seeders/' => database_path('seeders'),
         ], 'payment-seeders');
 
+        $this->publishes([
+            __DIR__ . '/Models' => app_path('Models'),
+        ], 'payment-models');
+
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
     }
 }

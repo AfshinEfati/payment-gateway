@@ -50,4 +50,18 @@ return [
         'gateways' => 'payment_gateways',
         'transactions' => 'payment_transactions',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Models
+    |--------------------------------------------------------------------------
+    |
+    | You can define the model classes used by the package here.
+    |
+    */
+    'models' => [
+        'bank' => \PaymentGateway\Models\Bank::class,
+        'gateway' => \PaymentGateway\Models\PaymentGateway::class,
+        'transaction' => \PaymentGateway\Models\PaymentTransaction::class,
+    ],
 ];
