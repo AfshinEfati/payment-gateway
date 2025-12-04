@@ -135,11 +135,11 @@ class PaymentServiceProvider extends ServiceProvider
         ], 'efati-payment-migrations');
 
         $this->publishes([
-            __DIR__ . '/../database/seeders/' => database_path('seeders'),
+            __DIR__ . '/../stubs/database/seeders/' => database_path('seeders'),
         ], 'efati-payment-seeders');
 
         $this->publishes([
-            __DIR__ . '/Models' => app_path('Models'),
+            __DIR__ . '/../stubs/Models' => app_path('Models'),
         ], 'efati-payment-models');
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
