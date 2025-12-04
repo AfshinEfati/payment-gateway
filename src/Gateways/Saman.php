@@ -2,20 +2,24 @@
 
 namespace PaymentGateway\Gateways;
 
-use Illuminate\Support\Facades\Http;
 use PaymentGateway\Contracts\PaymentGatewayInterface;
+use PaymentGateway\Core\GatewayRequest;
+use PaymentGateway\Core\RequestSender;
 use PaymentGateway\DTOs\PaymentRequestDTO;
 use PaymentGateway\DTOs\PaymentVerifyDTO;
 use PaymentGateway\Exceptions\PaymentException;
+use PaymentGateway\Helpers\XmlBuilder;
 
 class Saman implements PaymentGatewayInterface
 {
     protected $config;
     protected $rawResponse;
+    protected $sender;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->sender = new RequestSender();
     }
 
     public function initialize(PaymentRequestDTO $dto): array
@@ -24,16 +28,17 @@ class Saman implements PaymentGatewayInterface
         // Generate token via their REST API
         $url = 'https://sep.shaparak.ir/onlinepg/onlinepg';
 
-        $response = Http::asForm()->post($url, [
+        $request = GatewayRequest::post($url, [
             'Action' => 'token',
             'TerminalId' => $this->config['terminal_id'],
             'Amount' => $dto->amount,
             'ResNum' => $dto->orderId,
             'RedirectUrl' => $dto->callbackUrl,
             'CellNumber' => $dto->mobile,
-        ]);
+        ])->asForm();
 
-        $token = $response->body();
+        $response = $this->sender->send($request);
+        $token = $response->rawBody;
         $this->rawResponse = ['token' => $token];
 
         if (empty($token) || strlen($token) < 10) {
@@ -57,54 +62,44 @@ class Saman implements PaymentGatewayInterface
         $url = 'https://sep.shaparak.ir/Payments/ReferencePayment.asmx';
         $action = 'http://sep.shaparak.ir/payments/VerifyTransaction';
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <VerifyTransaction xmlns="http://sep.shaparak.ir/payments">
-      <RefNum>' . $dto->authority . '</RefNum>
-      <MID>' . $this->config['merchant_id'] . '</MID>
-    </VerifyTransaction>
-  </soap:Body>
-</soap:Envelope>';
+        $data = [
+            'VerifyTransaction' => [
+                'RefNum' => $dto->authority,
+                'MID' => $this->config['merchant_id'],
+            ]
+        ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $body = XmlBuilder::build('VerifyTransaction', $data['VerifyTransaction'], [], ['xmlns' => 'http://sep.shaparak.ir/payments']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-            if ($response->failed()) {
-                throw new PaymentException("Saman Verification Connection Error: " . $response->body());
-            }
+        $request = GatewayRequest::post($url, $xml)
+            ->asSoap($action);
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-            
-            $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
+        $response = $this->sender->send($request);
 
-            if ($result === null) {
-                 throw new PaymentException("Saman: Invalid verification response.");
-            }
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $response->rawBody);
+        $xmlObj = simplexml_load_string($cleanXml);
 
-            $verifyResult = (float)$result;
+        $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
 
-            $this->rawResponse = ['verify_result' => $verifyResult];
-
-            // Positive values mean success and represent the amount
-            if ($verifyResult <= 0) {
-                throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
-            }
-
-            return [
-                'status' => 'success',
-                'ref_id' => $dto->authority,
-                'tracking_code' => $dto->authority,
-            ];
-
-        } catch (\Exception $e) {
-            throw new PaymentException("Saman Verification Error: " . $e->getMessage());
+        if ($result === null) {
+            throw new PaymentException("Saman: Invalid verification response.");
         }
+
+        $verifyResult = (float)$result;
+
+        $this->rawResponse = ['verify_result' => $verifyResult];
+
+        // Positive values mean success and represent the amount
+        if ($verifyResult <= 0) {
+            throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
+        }
+
+        return [
+            'status' => 'success',
+            'ref_id' => $dto->authority,
+            'tracking_code' => $dto->authority,
+        ];
     }
 
     public function getTransactionId(): ?string

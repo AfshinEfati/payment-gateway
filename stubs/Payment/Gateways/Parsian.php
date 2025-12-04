@@ -2,121 +2,127 @@
 
 namespace App\Payment\Gateways;
 
-use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
+use App\Payment\Core\GatewayRequest;
+use App\Payment\Core\RequestSender;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use App\Payment\Helpers\XmlBuilder;
 
 class Parsian implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
+  protected $config;
+  protected $rawResponse;
+  protected $sender;
 
-    public function __construct(array $config)
-    {
-        $this->config = $config;
+  public function __construct(array $config)
+  {
+    $this->config = $config;
+    $this->sender = new RequestSender();
+  }
+
+  public function initialize(PaymentRequestDTO $dto): array
+  {
+    $url = 'https://pec.shaparak.ir/NewIPGServices/Sale/SaleService.asmx?op=SalePaymentRequest';
+
+    $data = [
+      'SalePaymentRequest' => [
+        'requestData' => [
+          'LoginAccount' => $this->config['pin'],
+          'Amount' => $dto->amount,
+          'OrderId' => $dto->orderId,
+          'CallBackUrl' => $dto->callbackUrl,
+          'AdditionalData' => '',
+          'Originator' => '',
+        ]
+      ]
+    ];
+
+    $body = XmlBuilder::build('SalePaymentRequest', $data['SalePaymentRequest'], [], ['xmlns' => 'https://pec.Shaparak.ir/NewIPGServices/Sale/SaleService']);
+    $xml = XmlBuilder::soapEnvelope($body);
+
+    $request = GatewayRequest::post($url, $xml)
+      ->asSoap('https://pec.Shaparak.ir/NewIPGServices/Sale/SaleService/SalePaymentRequest');
+
+    $response = $this->sender->send($request);
+
+    // Parse SOAP response
+    $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $response->rawBody);
+    $xmlObj = simplexml_load_string($cleanXml);
+
+    $result = $xmlObj->Body->SalePaymentRequestResponse->SalePaymentRequestResult ?? null;
+
+    $token = (string)$result->Token ?? null;
+    $status = (int)$result->Status ?? -1;
+
+    $this->rawResponse = ['token' => $token, 'status' => $status];
+
+    if ($status != 0 || !$token) {
+      throw new PaymentException("Parsian initialization failed. Status: {$status}");
     }
 
-    public function initialize(PaymentRequestDTO $dto): array
-    {
-        $url = 'https://pec.shaparak.ir/NewIPGServices/Sale/SaleService.asmx?op=SalePaymentRequest';
+    return [
+      'url' => 'https://pec.shaparak.ir/NewIPG/?Token=' . $token,
+      'token' => $token,
+    ];
+  }
 
-        $soapRequest = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <SalePaymentRequest xmlns="https://pec.Shaparak.ir/NewIPGServices/Sale/SaleService">
-      <requestData>
-        <LoginAccount>' . $this->config['pin'] . '</LoginAccount>
-        <Amount>' . $dto->amount . '</Amount>
-        <OrderId>' . $dto->orderId . '</OrderId>
-        <CallBackUrl>' . $dto->callbackUrl . '</CallBackUrl>
-        <AdditionalData></AdditionalData>
-        <Originator></Originator>
-      </requestData>
-    </SalePaymentRequest>
-  </soap:Body>
-</soap:Envelope>';
+  public function verify(PaymentVerifyDTO $dto): array
+  {
+    $url = 'https://pec.shaparak.ir/NewIPGServices/Confirm/ConfirmService.asmx?op=ConfirmPayment';
 
-        $response = Http::withHeaders([
-            'Content-Type' => 'text/xml; charset=utf-8',
-            'SOAPAction' => 'https://pec.Shaparak.ir/NewIPGServices/Sale/SaleService/SalePaymentRequest',
-        ])->send('POST', $url, ['body' => $soapRequest]);
+    $data = [
+      'ConfirmPayment' => [
+        'requestData' => [
+          'LoginAccount' => $this->config['pin'],
+          'Token' => $dto->authority,
+        ]
+      ]
+    ];
 
-        // Parse SOAP response
-        $xml = simplexml_load_string($response->body());
-        $xml->registerXPathNamespace('soap', 'http://schemas.xmlsoap.org/soap/envelope/');
-        $result = $xml->xpath('//soap:Body')[0];
+    $body = XmlBuilder::build('ConfirmPayment', $data['ConfirmPayment'], [], ['xmlns' => 'https://pec.Shaparak.ir/NewIPGServices/Confirm/ConfirmService']);
+    $xml = XmlBuilder::soapEnvelope($body);
 
-        $token = (string)$result->SalePaymentRequestResponse->SalePaymentRequestResult->Token ?? null;
-        $status = (int)$result->SalePaymentRequestResponse->SalePaymentRequestResult->Status ?? -1;
+    $request = GatewayRequest::post($url, $xml)
+      ->asSoap('https://pec.Shaparak.ir/NewIPGServices/Confirm/ConfirmService/ConfirmPayment');
 
-        $this->rawResponse = ['token' => $token, 'status' => $status];
+    $response = $this->sender->send($request);
 
-        if ($status != 0 || !$token) {
-            throw new PaymentException("Parsian initialization failed. Status: {$status}");
-        }
+    // Parse SOAP response
+    $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $response->rawBody);
+    $xmlObj = simplexml_load_string($cleanXml);
 
-        return [
-            'url' => 'https://pec.shaparak.ir/NewIPG/?Token=' . $token,
-            'token' => $token,
-        ];
+    $result = $xmlObj->Body->ConfirmPaymentResponse->ConfirmPaymentResult ?? null;
+
+    $status = (int)$result->Status ?? -1;
+    $rrn = (string)$result->RRN ?? null;
+
+    $this->rawResponse = ['status' => $status, 'rrn' => $rrn];
+
+    if ($status != 0) {
+      throw new PaymentException("Parsian verification failed. Status: {$status}");
     }
 
-    public function verify(PaymentVerifyDTO $dto): array
-    {
-        $url = 'https://pec.shaparak.ir/NewIPGServices/Confirm/ConfirmService.asmx?op=ConfirmPayment';
+    return [
+      'status' => 'success',
+      'ref_id' => $rrn,
+      'tracking_code' => $rrn,
+    ];
+  }
 
-        $soapRequest = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <ConfirmPayment xmlns="https://pec.Shaparak.ir/NewIPGServices/Confirm/ConfirmService">
-      <requestData>
-        <LoginAccount>' . $this->config['pin'] . '</LoginAccount>
-        <Token>' . $dto->authority . '</Token>
-      </requestData>
-    </ConfirmPayment>
-  </soap:Body>
-</soap:Envelope>';
+  public function getTransactionId(): ?string
+  {
+    return $this->rawResponse['token'] ?? null;
+  }
 
-        $response = Http::withHeaders([
-            'Content-Type' => 'text/xml; charset=utf-8',
-            'SOAPAction' => 'https://pec.Shaparak.ir/NewIPGServices/Confirm/ConfirmService/ConfirmPayment',
-        ])->send('POST', $url, ['body' => $soapRequest]);
+  public function getTrackingCode(): ?string
+  {
+    return $this->rawResponse['rrn'] ?? null;
+  }
 
-        // Parse SOAP response
-        $xml = simplexml_load_string($response->body());
-        $xml->registerXPathNamespace('soap', 'http://schemas.xmlsoap.org/soap/envelope/');
-        $result = $xml->xpath('//soap:Body')[0];
-
-        $status = (int)$result->ConfirmPaymentResponse->ConfirmPaymentResult->Status ?? -1;
-        $rrn = (string)$result->ConfirmPaymentResponse->ConfirmPaymentResult->RRN ?? null;
-
-        $this->rawResponse = ['status' => $status, 'rrn' => $rrn];
-
-        if ($status != 0) {
-            throw new PaymentException("Parsian verification failed. Status: {$status}");
-        }
-
-        return [
-            'status' => 'success',
-            'ref_id' => $rrn,
-            'tracking_code' => $rrn,
-        ];
-    }
-
-    public function getTransactionId(): ?string
-    {
-        return $this->rawResponse['token'] ?? null;
-    }
-
-    public function getTrackingCode(): ?string
-    {
-        return $this->rawResponse['rrn'] ?? null;
-    }
-
-    public function getRawResponse(): ?array
-    {
-        return $this->rawResponse;
-    }
+  public function getRawResponse(): ?array
+  {
+    return $this->rawResponse;
+  }
 }

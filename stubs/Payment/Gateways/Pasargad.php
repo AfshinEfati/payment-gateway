@@ -2,8 +2,9 @@
 
 namespace App\Payment\Gateways;
 
-use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
+use App\Payment\Core\GatewayRequest;
+use App\Payment\Core\RequestSender;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
@@ -12,10 +13,12 @@ class Pasargad implements PaymentGatewayInterface
 {
     protected $config;
     protected $rawResponse;
+    protected $sender;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->sender = new RequestSender();
     }
 
     public function initialize(PaymentRequestDTO $dto): array
@@ -31,12 +34,12 @@ class Pasargad implements PaymentGatewayInterface
         $redirectAddress = $dto->callbackUrl;
 
         // Data to sign
-        $data = "#" . $merchantCode . "#" . $terminalCode . "#" . $invoiceNumber . "#" . $invoiceDate . "#" . $amount . "#" . $redirectAddress . "#" . $dto->metadata['action'] ?? 1003 . "#" . $timeStamp . "#";
+        $data = "#" . $merchantCode . "#" . $terminalCode . "#" . $invoiceNumber . "#" . $invoiceDate . "#" . $amount . "#" . $redirectAddress . "#" . ($dto->metadata['action'] ?? 1003) . "#" . $timeStamp . "#";
 
         // Generate RSA signature
         $sign = $this->sign($data);
 
-        $response = Http::asForm()->post($url, [
+        $request = GatewayRequest::post($url, [
             'InvoiceNumber' => $invoiceNumber,
             'InvoiceDate' => $invoiceDate,
             'Amount' => $amount,
@@ -46,12 +49,13 @@ class Pasargad implements PaymentGatewayInterface
             'TimeStamp' => $timeStamp,
             'Action' => $dto->metadata['action'] ?? 1003,
             'Sign' => $sign,
-        ]);
+        ])->asForm();
 
-        $this->rawResponse = $response->json();
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->data;
 
-        if ($response->failed() || !isset($this->rawResponse['IsSuccess']) || !$this->rawResponse['IsSuccess']) {
-            throw new PaymentException("Pasargad initialization failed: " . ($this->rawResponse['Message'] ?? $response->body()));
+        if (!$response->success || !isset($this->rawResponse['IsSuccess']) || !$this->rawResponse['IsSuccess']) {
+            throw new PaymentException("Pasargad initialization failed: " . ($this->rawResponse['Message'] ?? $response->rawBody));
         }
 
         $token = $this->rawResponse['Token'];
@@ -79,7 +83,7 @@ class Pasargad implements PaymentGatewayInterface
         // Generate RSA signature
         $sign = $this->sign($data);
 
-        $response = Http::asForm()->post($url, [
+        $request = GatewayRequest::post($url, [
             'InvoiceNumber' => $invoiceNumber,
             'InvoiceDate' => $invoiceDate,
             'Amount' => $amount,
@@ -87,11 +91,12 @@ class Pasargad implements PaymentGatewayInterface
             'MerchantCode' => $merchantCode,
             'TimeStamp' => $timeStamp,
             'Sign' => $sign,
-        ]);
+        ])->asForm();
 
-        $this->rawResponse = $response->json();
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->data;
 
-        if ($response->failed() || !isset($this->rawResponse['IsSuccess']) || !$this->rawResponse['IsSuccess']) {
+        if (!$response->success || !isset($this->rawResponse['IsSuccess']) || !$this->rawResponse['IsSuccess']) {
             throw new PaymentException("Pasargad verification failed: " . ($this->rawResponse['Message'] ?? 'Unknown error'));
         }
 

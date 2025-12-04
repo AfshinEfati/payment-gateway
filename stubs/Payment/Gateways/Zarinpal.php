@@ -2,8 +2,9 @@
 
 namespace App\Payment\Gateways;
 
-use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
+use App\Payment\Core\GatewayRequest;
+use App\Payment\Core\RequestSender;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
@@ -12,10 +13,12 @@ class Zarinpal implements PaymentGatewayInterface
 {
     protected $config;
     protected $rawResponse;
+    protected $sender;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->sender = new RequestSender();
     }
 
     public function initialize(PaymentRequestDTO $dto): array
@@ -24,7 +27,7 @@ class Zarinpal implements PaymentGatewayInterface
             ? 'https://sandbox.zarinpal.com/pg/v4/payment/request.json'
             : 'https://api.zarinpal.com/pg/v4/payment/request.json';
 
-        $response = Http::post($url, [
+        $request = GatewayRequest::post($url, [
             'merchant_id' => $this->config['merchant_id'],
             'amount' => $dto->amount,
             'callback_url' => $dto->callbackUrl,
@@ -33,15 +36,16 @@ class Zarinpal implements PaymentGatewayInterface
                 'mobile' => $dto->mobile,
                 'email' => $dto->email,
             ],
-        ]);
+        ])->asJson();
 
-        $this->rawResponse = $response->json();
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->data;
 
-        if ($response->failed()) {
-            throw new PaymentException("Zarinpal initialization failed: " . $response->body());
+        if (!$response->success) {
+            throw new PaymentException("Zarinpal initialization failed: " . $response->rawBody);
         }
 
-        $result = $response->json();
+        $result = $response->data;
 
         if (isset($result['errors']) && !empty($result['errors'])) {
             throw new PaymentException("Zarinpal Error: " . json_encode($result['errors']));
@@ -68,19 +72,20 @@ class Zarinpal implements PaymentGatewayInterface
             ? 'https://sandbox.zarinpal.com/pg/v4/payment/verify.json'
             : 'https://api.zarinpal.com/pg/v4/payment/verify.json';
 
-        $response = Http::post($url, [
+        $request = GatewayRequest::post($url, [
             'merchant_id' => $this->config['merchant_id'],
             'amount' => $dto->amount,
             'authority' => $dto->authority,
-        ]);
+        ])->asJson();
 
-        $this->rawResponse = $response->json();
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->data;
 
-        if ($response->failed()) {
-            throw new PaymentException("Zarinpal verification failed: " . $response->body());
+        if (!$response->success) {
+            throw new PaymentException("Zarinpal verification failed: " . $response->rawBody);
         }
 
-        $result = $response->json();
+        $result = $response->data;
 
         if (isset($result['errors']) && !empty($result['errors'])) {
             throw new PaymentException("Zarinpal Verification Error: " . json_encode($result['errors']));

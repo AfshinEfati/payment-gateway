@@ -2,145 +2,129 @@
 
 namespace App\Payment\Gateways;
 
-use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
+use App\Payment\Core\GatewayRequest;
+use App\Payment\Core\RequestSender;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use App\Payment\Helpers\XmlBuilder;
 
 class Sadad implements PaymentGatewayInterface
 {
     protected $config;
     protected $rawResponse;
+    protected $sender;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->sender = new RequestSender();
     }
 
     public function initialize(PaymentRequestDTO $dto): array
     {
-        $url = 'https://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest.asmx';
-        $action = 'http://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest';
-
         $signData = $this->config['terminal_id'] . ';' . $dto->orderId . ';' . $dto->amount;
         $signature = $this->generateSignature($signData);
         $localDateTime = date('m/d/Y g:i:s a');
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <PaymentRequest xmlns="http://sadad.shaparak.ir/vpg/api/v0/Request">
-      <PaymentRequestModel>
-        <MerchantId>' . $this->config['merchant_id'] . '</MerchantId>
-        <TerminalId>' . $this->config['terminal_id'] . '</TerminalId>
-        <Amount>' . $dto->amount . '</Amount>
-        <OrderId>' . $dto->orderId . '</OrderId>
-        <LocalDateTime>' . $localDateTime . '</LocalDateTime>
-        <ReturnUrl>' . $dto->callbackUrl . '</ReturnUrl>
-        <SignData>' . $signature . '</SignData>
-        <AdditionalData>' . ($dto->description ?? '') . '</AdditionalData>
-        <UserId>0</UserId>
-        <ApplicationName>' . ($this->config['application_name'] ?? 'Payment') . '</ApplicationName>
-      </PaymentRequestModel>
-    </PaymentRequest>
-  </soap:Body>
-</soap:Envelope>';
+        $data = [
+            'PaymentRequestModel' => [
+                'MerchantId' => $this->config['merchant_id'],
+                'TerminalId' => $this->config['terminal_id'],
+                'Amount' => $dto->amount,
+                'OrderId' => $dto->orderId,
+                'LocalDateTime' => $localDateTime,
+                'ReturnUrl' => $dto->callbackUrl,
+                'SignData' => $signature,
+                'AdditionalData' => $dto->description ?? '',
+                'UserId' => 0,
+                'ApplicationName' => $this->config['application_name'] ?? 'Payment',
+            ]
+        ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $body = XmlBuilder::build('PaymentRequest', $data, [], ['xmlns' => 'http://sadad.shaparak.ir/vpg/api/v0/Request']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-            if ($response->failed()) {
-                throw new PaymentException("Sadad Connection Error: " . $response->body());
-            }
+        $request = GatewayRequest::post('https://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest.asmx', $xml)
+            ->asSoap('http://sadad.shaparak.ir/vpg/api/v0/Request/PaymentRequest');
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-            
-            $result = $xmlObj->Body->PaymentRequestResponse->PaymentRequestResult ?? null;
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->rawBody;
 
-            if (!$result) {
-                 throw new PaymentException("Sadad: Invalid response structure.");
-            }
-
-            $resCode = (int)$result->ResCode;
-            $token = (string)$result->Token;
-            $description = (string)$result->Description;
-
-            if ($resCode != 0) {
-                throw new PaymentException("Sadad initialization failed: " . $description);
-            }
-
-            return [
-                'url' => 'https://sadad.shaparak.ir/VPG/Purchase?token=' . $token,
-                'token' => $token,
-            ];
-
-        } catch (\Exception $e) {
-            throw new PaymentException("Sadad Error: " . $e->getMessage());
+        if (!$response->success) {
+            throw new PaymentException("Sadad Connection Error: " . $response->rawBody);
         }
+
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $response->rawBody);
+        $xmlObj = simplexml_load_string($cleanXml);
+
+        $result = $xmlObj->Body->PaymentRequestResponse->PaymentRequestResult ?? null;
+
+        if (!$result) {
+            throw new PaymentException("Sadad: Invalid response structure.");
+        }
+
+        $resCode = (int)$result->ResCode;
+        $token = (string)$result->Token;
+        $description = (string)$result->Description;
+
+        if ($resCode != 0) {
+            throw new PaymentException("Sadad initialization failed: " . $description);
+        }
+
+        return [
+            'url' => 'https://sadad.shaparak.ir/VPG/Purchase?token=' . $token,
+            'token' => $token,
+        ];
     }
 
     public function verify(PaymentVerifyDTO $dto): array
     {
-        $url = 'https://sadad.shaparak.ir/vpg/api/v0/Advice/Verify.asmx';
-        $action = 'http://sadad.shaparak.ir/vpg/api/v0/Advice/VerifyTransaction';
-
         $signData = $dto->authority;
         $signature = $this->generateSignature($signData);
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <VerifyTransaction xmlns="http://sadad.shaparak.ir/vpg/api/v0/Advice">
-      <VerifyTransactionModel>
-        <Token>' . $dto->authority . '</Token>
-        <SignData>' . $signature . '</SignData>
-      </VerifyTransactionModel>
-    </VerifyTransaction>
-  </soap:Body>
-</soap:Envelope>';
+        $data = [
+            'VerifyTransactionModel' => [
+                'Token' => $dto->authority,
+                'SignData' => $signature,
+            ]
+        ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $body = XmlBuilder::build('VerifyTransaction', $data, [], ['xmlns' => 'http://sadad.shaparak.ir/vpg/api/v0/Advice']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-            if ($response->failed()) {
-                throw new PaymentException("Sadad Verification Connection Error: " . $response->body());
-            }
+        $request = GatewayRequest::post('https://sadad.shaparak.ir/vpg/api/v0/Advice/Verify.asmx', $xml)
+            ->asSoap('http://sadad.shaparak.ir/vpg/api/v0/Advice/VerifyTransaction');
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-            
-            $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
+        $response = $this->sender->send($request);
+        $this->rawResponse = $response->rawBody;
 
-            if (!$result) {
-                 throw new PaymentException("Sadad: Invalid verification response.");
-            }
-
-            $resCode = (int)$result->ResCode;
-            $description = (string)$result->Description;
-
-            if ($resCode != 0) {
-                throw new PaymentException("Sadad Verification Error: " . $description);
-            }
-
-            return [
-                'status' => 'success',
-                'ref_id' => (string)$result->RetrivalRefNo ?? $dto->authority,
-                'tracking_code' => (string)$result->SystemTraceNo ?? $dto->authority,
-            ];
-
-        } catch (\Exception $e) {
-            throw new PaymentException("Sadad Verification Error: " . $e->getMessage());
+        if (!$response->success) {
+            throw new PaymentException("Sadad Verification Connection Error: " . $response->rawBody);
         }
+
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $response->rawBody);
+        $xmlObj = simplexml_load_string($cleanXml);
+
+        $result = $xmlObj->Body->VerifyTransactionResponse->VerifyTransactionResult ?? null;
+
+        if (!$result) {
+            throw new PaymentException("Sadad: Invalid verification response.");
+        }
+
+        $resCode = (int)$result->ResCode;
+        $description = (string)$result->Description;
+
+        if ($resCode != 0) {
+            throw new PaymentException("Sadad Verification Error: " . $description);
+        }
+
+        return [
+            'status' => 'success',
+            'ref_id' => (string)$result->RetrivalRefNo ?? $dto->authority,
+            'tracking_code' => (string)$result->SystemTraceNo ?? $dto->authority,
+        ];
     }
 
     protected function generateSignature($data)
@@ -161,6 +145,6 @@ class Sadad implements PaymentGatewayInterface
 
     public function getRawResponse(): ?array
     {
-        return $this->rawResponse;
+        return ['body' => $this->rawResponse];
     }
 }
