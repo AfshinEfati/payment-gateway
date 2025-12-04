@@ -12,9 +12,9 @@ use App\Payment\Helpers\XmlBuilder;
 
 class Sadad implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
-    protected $sender;
+    protected array $config;
+    protected ?string $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
@@ -22,6 +22,9 @@ class Sadad implements PaymentGatewayInterface
         $this->sender = new RequestSender();
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $signData = $this->config['terminal_id'] . ';' . $dto->orderId . ';' . $dto->amount;
@@ -79,6 +82,9 @@ class Sadad implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $signData = $dto->authority;

@@ -59,7 +59,7 @@ class Parsian implements PaymentGatewayInterface
     $this->rawResponse = ['token' => $token, 'status' => $status];
 
     if ($status != 0 || !$token) {
-      throw new PaymentException("Parsian initialization failed. Status: {$status}");
+      throw new PaymentException("Parsian initialization failed. Status: $status");
     }
 
     return [
@@ -101,7 +101,7 @@ class Parsian implements PaymentGatewayInterface
     $this->rawResponse = ['status' => $status, 'rrn' => $rrn];
 
     if ($status != 0) {
-      throw new PaymentException("Parsian verification failed. Status: {$status}");
+      throw new PaymentException("Parsian verification failed. Status: $status");
     }
 
     return [

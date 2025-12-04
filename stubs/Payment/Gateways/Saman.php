@@ -12,9 +12,9 @@ use App\Payment\Helpers\XmlBuilder;
 
 class Saman implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
-    protected $sender;
+    protected array $config;
+    protected ?array $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
@@ -22,6 +22,9 @@ class Saman implements PaymentGatewayInterface
         $this->sender = new RequestSender();
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         // Saman uses a simple POST form submission
@@ -56,6 +59,9 @@ class Saman implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         // Saman verification via SOAP
@@ -92,7 +98,7 @@ class Saman implements PaymentGatewayInterface
 
         // Positive values mean success and represent the amount
         if ($verifyResult <= 0) {
-            throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
+            throw new PaymentException("Saman verification failed. Result: $verifyResult");
         }
 
         return [

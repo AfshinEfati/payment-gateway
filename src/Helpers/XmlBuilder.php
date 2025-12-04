@@ -10,17 +10,17 @@ class XmlBuilder
 
         $nsString = '';
         foreach ($namespaces as $prefix => $uri) {
-            $nsString .= " xmlns:{$prefix}=\"{$uri}\"";
+            $nsString .= " xmlns:$prefix=\"$uri\"";
         }
 
         $attrString = '';
         foreach ($attributes as $key => $value) {
-            $attrString .= " {$key}=\"{$value}\"";
+            $attrString .= " $key=\"$value\"";
         }
 
-        $xml .= "<{$root}{$nsString}{$attrString}>";
+        $xml .= "<$root$nsString$attrString>";
         $xml .= self::arrayToXml($data);
-        $xml .= "</{$root}>";
+        $xml .= "</$root>";
 
         return $xml;
     }
@@ -49,16 +49,16 @@ class XmlBuilder
                         $xml .= self::arrayToXml($item);
                     }
                 } else {
-                    $xml .= "<{$key}>";
+                    $xml .= "<$key>";
                     $xml .= self::arrayToXml($value);
-                    $xml .= "</{$key}>";
+                    $xml .= "</$key>";
                 }
             } else {
                 // If the value is raw XML (e.g. pre-built body), don't escape it? 
                 // For safety, we usually escape, but if we pass a string that is meant to be a sub-tree...
                 // Let's assume values are simple strings for now.
                 // If we need to pass raw XML, we might need a special wrapper.
-                $xml .= "<{$key}>" . htmlspecialchars((string)$value) . "</{$key}>";
+                $xml .= "<$key>" . htmlspecialchars((string)$value) . "</$key>";
             }
         }
         return $xml;

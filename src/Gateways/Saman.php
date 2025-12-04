@@ -92,7 +92,7 @@ class Saman implements PaymentGatewayInterface
 
         // Positive values mean success and represent the amount
         if ($verifyResult <= 0) {
-            throw new PaymentException("Saman verification failed. Result: {$verifyResult}");
+            throw new PaymentException("Saman verification failed. Result: $verifyResult");
         }
 
         return [

@@ -39,7 +39,7 @@ class NextPay implements PaymentGatewayInterface
         $token = $this->rawResponse['trans_id'];
 
         return [
-            'url' => "https://nextpay.org/nx/gateway/payment/{$token}",
+            'url' => "https://nextpay.org/nx/gateway/payment/$token",
             'token' => $token,
         ];
     }

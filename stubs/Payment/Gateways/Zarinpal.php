@@ -11,9 +11,9 @@ use App\Payment\PaymentException;
 
 class Zarinpal implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
-    protected $sender;
+    protected array $config;
+    protected ?array $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
@@ -21,6 +21,9 @@ class Zarinpal implements PaymentGatewayInterface
         $this->sender = new RequestSender();
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $url = $this->config['sandbox']
@@ -57,8 +60,8 @@ class Zarinpal implements PaymentGatewayInterface
 
         $authority = $result['data']['authority'];
         $startPayUrl = $this->config['sandbox']
-            ? "https://sandbox.zarinpal.com/pg/StartPay/{$authority}"
-            : "https://www.zarinpal.com/pg/StartPay/{$authority}";
+            ? "https://sandbox.zarinpal.com/pg/StartPay/$authority"
+            : "https://www.zarinpal.com/pg/StartPay/$authority";
 
         return [
             'url' => $startPayUrl,
@@ -66,6 +69,9 @@ class Zarinpal implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $url = $this->config['sandbox']
@@ -101,7 +107,7 @@ class Zarinpal implements PaymentGatewayInterface
             ];
         }
 
-        throw new PaymentException("Zarinpal Verification Failed. Code: {$code}");
+        throw new PaymentException("Zarinpal Verification Failed. Code: $code");
     }
 
     public function getTransactionId(): ?string

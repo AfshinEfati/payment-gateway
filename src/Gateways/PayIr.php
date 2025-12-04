@@ -40,7 +40,7 @@ class PayIr implements PaymentGatewayInterface
         $token = $this->rawResponse['token'];
 
         return [
-            'url' => "https://pay.ir/pg/{$token}",
+            'url' => "https://pay.ir/pg/$token",
             'token' => $token,
         ];
     }

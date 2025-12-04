@@ -43,7 +43,7 @@ class PayPing implements PaymentGatewayInterface
         $code = $this->rawResponse['code'];
 
         return [
-            'url' => "https://api.payping.ir/v2/pay/gotoipg/{$code}",
+            'url' => "https://api.payping.ir/v2/pay/gotoipg/$code",
             'token' => $code,
         ];
     }

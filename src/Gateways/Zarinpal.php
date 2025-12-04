@@ -57,8 +57,8 @@ class Zarinpal implements PaymentGatewayInterface
 
         $authority = $result['data']['authority'];
         $startPayUrl = $this->config['sandbox']
-            ? "https://sandbox.zarinpal.com/pg/StartPay/{$authority}"
-            : "https://www.zarinpal.com/pg/StartPay/{$authority}";
+            ? "https://sandbox.zarinpal.com/pg/StartPay/$authority"
+            : "https://www.zarinpal.com/pg/StartPay/$authority";
 
         return [
             'url' => $startPayUrl,
@@ -101,7 +101,7 @@ class Zarinpal implements PaymentGatewayInterface
             ];
         }
 
-        throw new PaymentException("Zarinpal Verification Failed. Code: {$code}");
+        throw new PaymentException("Zarinpal Verification Failed. Code: $code");
     }
 
     public function getTransactionId(): ?string

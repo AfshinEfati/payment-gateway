@@ -12,9 +12,9 @@ use App\Payment\Helpers\XmlBuilder;
 
 class Parsian implements PaymentGatewayInterface
 {
-  protected $config;
-  protected $rawResponse;
-  protected $sender;
+  protected array $config;
+  protected ?array $rawResponse = null;
+  protected RequestSender $sender;
 
   public function __construct(array $config)
   {
@@ -22,6 +22,9 @@ class Parsian implements PaymentGatewayInterface
     $this->sender = new RequestSender();
   }
 
+  /**
+   * @throws PaymentException
+   */
   public function initialize(PaymentRequestDTO $dto): array
   {
     $url = 'https://pec.shaparak.ir/NewIPGServices/Sale/SaleService.asmx?op=SalePaymentRequest';
@@ -59,7 +62,7 @@ class Parsian implements PaymentGatewayInterface
     $this->rawResponse = ['token' => $token, 'status' => $status];
 
     if ($status != 0 || !$token) {
-      throw new PaymentException("Parsian initialization failed. Status: {$status}");
+      throw new PaymentException("Parsian initialization failed. Status: $status");
     }
 
     return [
@@ -68,6 +71,9 @@ class Parsian implements PaymentGatewayInterface
     ];
   }
 
+  /**
+   * @throws PaymentException
+   */
   public function verify(PaymentVerifyDTO $dto): array
   {
     $url = 'https://pec.shaparak.ir/NewIPGServices/Confirm/ConfirmService.asmx?op=ConfirmPayment';
@@ -101,7 +107,7 @@ class Parsian implements PaymentGatewayInterface
     $this->rawResponse = ['status' => $status, 'rrn' => $rrn];
 
     if ($status != 0) {
-      throw new PaymentException("Parsian verification failed. Status: {$status}");
+      throw new PaymentException("Parsian verification failed. Status: $status");
     }
 
     return [

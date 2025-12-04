@@ -11,9 +11,9 @@ use App\Payment\PaymentException;
 
 class Pasargad implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
-    protected $sender;
+    protected array $config;
+    protected ?array $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
@@ -21,6 +21,9 @@ class Pasargad implements PaymentGatewayInterface
         $this->sender = new RequestSender();
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $url = 'https://pep.shaparak.ir/Api/v1/Payment/GetToken';
@@ -66,6 +69,9 @@ class Pasargad implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $url = 'https://pep.shaparak.ir/Api/v1/Payment/VerifyPayment';
@@ -107,6 +113,9 @@ class Pasargad implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     protected function sign($data)
     {
         // Load private key from config

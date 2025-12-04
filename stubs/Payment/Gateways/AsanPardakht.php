@@ -4,19 +4,24 @@ namespace App\Payment\Gateways;
 
 use Illuminate\Support\Facades\Http;
 use App\Payment\Contracts\PaymentGatewayInterface;
+use App\Payment\Core\GatewayRequest;
+use App\Payment\Core\RequestSender;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use App\Payment\Helpers\XmlBuilder;
 use Exception;
 
 class AsanPardakht implements PaymentGatewayInterface
 {
     protected array $config;
     protected ?array $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->sender = new RequestSender();
     }
 
     /**
@@ -33,60 +38,51 @@ class AsanPardakht implements PaymentGatewayInterface
         $callbackUrl = $dto->callbackUrl;
 
         // 1,username,password,orderId,amount,localDate,additionalData,callbackUrl,0
-        $req = "1,{$username},{$password},{$orderId},{$amount},{$localDate},{$additionalData},{$callbackUrl},0";
+        $req = "1,$username,$password,$orderId,$amount,$localDate,$additionalData,$callbackUrl,0";
 
         $encryptedRequest = $this->encrypt($req);
 
-        $url = 'https://services.asanpardakht.net/paygate/merchantservices.asmx';
-        $action = 'http://tempuri.org/RequestOperation';
+        $data = [
+            'merchantConfigurationID' => $this->config['merchant_config_id'],
+            'encryptedRequest' => $encryptedRequest,
+        ];
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <RequestOperation xmlns="http://tempuri.org/">
-      <merchantConfigurationID>' . $this->config['merchant_config_id'] . '</merchantConfigurationID>
-      <encryptedRequest>' . $encryptedRequest . '</encryptedRequest>
-    </RequestOperation>
-  </soap:Body>
-</soap:Envelope>';
+        $body = XmlBuilder::build('RequestOperation', $data, [], ['xmlns' => 'http://tempuri.org/']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $request = GatewayRequest::post('https://services.asanpardakht.net/paygate/merchantservices.asmx', $xml)
+            ->asSoap('http://tempuri.org/RequestOperation');
 
-            if ($response->failed()) {
-                throw new PaymentException("AsanPardakht Connection Error: " . $response->body());
-            }
+        $response = $this->sender->send($request);
+        $responseBody = $response->rawBody;
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
+        if (!$response->success) {
+            throw new PaymentException("AsanPardakht Connection Error: " . $responseBody);
+        }
 
-            $result = $xmlObj->Body->RequestOperationResponse->RequestOperationResult ?? null;
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+        $xmlObj = simplexml_load_string($cleanXml);
 
-            if ($result === null) {
-                throw new PaymentException("AsanPardakht: Invalid response structure.");
-            }
+        $result = $xmlObj->Body->RequestOperationResponse->RequestOperationResult ?? null;
 
-            $responseStr = (string)$result;
-            $this->rawResponse = ['result' => $responseStr];
+        if ($result === null) {
+            throw new PaymentException("AsanPardakht: Invalid response structure.");
+        }
 
-            if (substr($responseStr, 0, 1) == '0') {
-                $refId = substr($responseStr, 2);
-                return [
-                    'url' => 'https://asan.shaparak.ir/',
-                    'token' => $refId,
-                    'form_data' => [
-                        'RefId' => $refId
-                    ]
-                ];
-            } else {
-                throw new PaymentException("AsanPardakht initialization failed. Code: {$responseStr}");
-            }
-        } catch (Exception $e) {
-            throw new PaymentException("AsanPardakht Error: " . $e->getMessage());
+        $responseStr = (string)$result;
+        $this->rawResponse = ['result' => $responseStr];
+
+        if (str_starts_with($responseStr, '0')) {
+            $refId = substr($responseStr, 2);
+            return [
+                'url' => 'https://asan.shaparak.ir/',
+                'token' => $refId,
+                'form_data' => [
+                    'RefId' => $refId
+                ]
+            ];
+        } else {
+            throw new PaymentException("AsanPardakht initialization failed. Code: $responseStr");
         }
     }
 
@@ -108,8 +104,8 @@ class AsanPardakht implements PaymentGatewayInterface
             throw new PaymentException("AsanPardakht: Invalid ReturningParams format.");
         }
 
-        $amount = $retArr[0];
-        $saleOrderId = $retArr[1];
+        // $amount = $retArr[0]; // Unused
+        // $saleOrderId = $retArr[1]; // Unused
         $refId = $retArr[2];
         $resCode = $retArr[3];
         $resMessage = $retArr[4];
@@ -119,82 +115,70 @@ class AsanPardakht implements PaymentGatewayInterface
         $this->rawResponse = ['decrypted_params' => $retArr];
 
         if ($resCode != '0' && $resCode != '00') {
-            throw new PaymentException("AsanPardakht Transaction Failed. Code: {$resCode}, Message: {$resMessage}");
+            throw new PaymentException("AsanPardakht Transaction Failed. Code: $resCode, Message: $resMessage");
         }
 
         // Verify
-        try {
-            $encryptedCredentials = $this->encrypt("{$this->config['username']},{$this->config['password']}");
+        $encryptedCredentials = $this->encrypt("{$this->config['username']},{$this->config['password']}");
 
-            $url = 'https://services.asanpardakht.net/paygate/merchantservices.asmx';
-            $action = 'http://tempuri.org/RequestVerification';
+        $verifyData = [
+            'merchantConfigurationID' => $this->config['merchant_config_id'],
+            'encryptedCredentials' => $encryptedCredentials,
+            'payGateTranID' => $payGateTranID,
+        ];
 
-            $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <RequestVerification xmlns="http://tempuri.org/">
-      <merchantConfigurationID>' . $this->config['merchant_config_id'] . '</merchantConfigurationID>
-      <encryptedCredentials>' . $encryptedCredentials . '</encryptedCredentials>
-      <payGateTranID>' . $payGateTranID . '</payGateTranID>
-    </RequestVerification>
-  </soap:Body>
-</soap:Envelope>';
+        $verifyBody = XmlBuilder::build('RequestVerification', $verifyData, [], ['xmlns' => 'http://tempuri.org/']);
+        $verifyXml = XmlBuilder::soapEnvelope($verifyBody);
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $request = GatewayRequest::post('https://services.asanpardakht.net/paygate/merchantservices.asmx', $verifyXml)
+            ->asSoap('http://tempuri.org/RequestVerification');
 
-            if ($response->failed()) {
-                throw new PaymentException("AsanPardakht Verification Connection Error: " . $response->body());
-            }
+        $response = $this->sender->send($request);
+        $responseBody = $response->rawBody;
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-
-            $verifyResult = (string)($xmlObj->Body->RequestVerificationResponse->RequestVerificationResult ?? '');
-
-            if ($verifyResult != '500') {
-                throw new PaymentException("AsanPardakht Verification Failed. Code: {$verifyResult}");
-            }
-
-            // Settlement
-            $action = 'http://tempuri.org/RequestReconciliation';
-            $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <RequestReconciliation xmlns="http://tempuri.org/">
-      <merchantConfigurationID>' . $this->config['merchant_config_id'] . '</merchantConfigurationID>
-      <encryptedCredentials>' . $encryptedCredentials . '</encryptedCredentials>
-      <payGateTranID>' . $payGateTranID . '</payGateTranID>
-    </RequestReconciliation>
-  </soap:Body>
-</soap:Envelope>';
-
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
-
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-
-            $settleResult = (string)($xmlObj->Body->RequestReconciliationResponse->RequestReconciliationResult ?? '');
-
-            if ($settleResult != '600') {
-                throw new PaymentException("AsanPardakht Settlement Failed. Code: {$settleResult}");
-            }
-
-            return [
-                'status' => 'success',
-                'ref_id' => $refId,
-                'tracking_code' => $rrn,
-            ];
-        } catch (Exception $e) {
-            throw new PaymentException("AsanPardakht Connection Error: " . $e->getMessage());
+        if (!$response->success) {
+            throw new PaymentException("AsanPardakht Verification Connection Error: " . $responseBody);
         }
+
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+        $xmlObj = simplexml_load_string($cleanXml);
+
+        $verifyResult = (string)($xmlObj->Body->RequestVerificationResponse->RequestVerificationResult ?? '');
+
+        if ($verifyResult != '500') {
+            throw new PaymentException("AsanPardakht Verification Failed. Code: $verifyResult");
+        }
+
+        // Settlement
+        $settleData = [
+            'merchantConfigurationID' => $this->config['merchant_config_id'],
+            'encryptedCredentials' => $encryptedCredentials,
+            'payGateTranID' => $payGateTranID,
+        ];
+
+        $settleBody = XmlBuilder::build('RequestReconciliation', $settleData, [], ['xmlns' => 'http://tempuri.org/']);
+        $settleXml = XmlBuilder::soapEnvelope($settleBody);
+
+        $settleRequest = GatewayRequest::post('https://services.asanpardakht.net/paygate/merchantservices.asmx', $settleXml)
+            ->asSoap('http://tempuri.org/RequestReconciliation');
+
+        $responseSettle = $this->sender->send($settleRequest);
+        $responseBodySettle = $responseSettle->rawBody;
+
+        $cleanXmlSettle = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBodySettle);
+        $xmlObjSettle = simplexml_load_string($cleanXmlSettle);
+
+        $settleResult = (string)($xmlObjSettle->Body->RequestReconciliationResponse->RequestReconciliationResult ?? '');
+
+        if ($settleResult != '600') {
+            throw new PaymentException("AsanPardakht Settlement Failed. Code: $settleResult");
+        }
+
+        return [
+            'status' => 'success',
+            'ref_id' => $refId,
+            'tracking_code' => $rrn,
+        ];
     }
 
     /**
@@ -202,38 +186,29 @@ class AsanPardakht implements PaymentGatewayInterface
      */
     protected function encrypt($string)
     {
-        $url = 'https://services.asanpardakht.net/paygate/internalutils.asmx';
-        $action = 'http://tempuri.org/EncryptInAES';
+        $data = [
+            'aesKey' => $this->config['key'],
+            'aesVector' => $this->config['iv'],
+            'toBeEncrypted' => $string,
+        ];
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <EncryptInAES xmlns="http://tempuri.org/">
-      <aesKey>' . $this->config['key'] . '</aesKey>
-      <aesVector>' . $this->config['iv'] . '</aesVector>
-      <toBeEncrypted>' . $string . '</toBeEncrypted>
-    </EncryptInAES>
-  </soap:Body>
-</soap:Envelope>';
+        $body = XmlBuilder::build('EncryptInAES', $data, [], ['xmlns' => 'http://tempuri.org/']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $request = GatewayRequest::post('https://services.asanpardakht.net/paygate/internalutils.asmx', $xml)
+            ->asSoap('http://tempuri.org/EncryptInAES');
 
-            if ($response->failed()) {
-                throw new PaymentException("AsanPardakht Encryption Connection Error: " . $response->body());
-            }
+        $response = $this->sender->send($request);
+        $responseBody = $response->rawBody;
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-
-            return (string)($xmlObj->Body->EncryptInAESResponse->EncryptInAESResult ?? '');
-        } catch (Exception $e) {
-            throw new PaymentException("AsanPardakht Encryption Error: " . $e->getMessage());
+        if (!$response->success) {
+            throw new PaymentException("AsanPardakht Encryption Connection Error: " . $responseBody);
         }
+
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+        $xmlObj = simplexml_load_string($cleanXml);
+
+        return (string)($xmlObj->Body->EncryptInAESResponse->EncryptInAESResult ?? '');
     }
 
     /**
@@ -241,38 +216,29 @@ class AsanPardakht implements PaymentGatewayInterface
      */
     protected function decrypt($string)
     {
-        $url = 'https://services.asanpardakht.net/paygate/internalutils.asmx';
-        $action = 'http://tempuri.org/DecryptInAES';
+        $data = [
+            'aesKey' => $this->config['key'],
+            'aesVector' => $this->config['iv'],
+            'toBeDecrypted' => $string,
+        ];
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <DecryptInAES xmlns="http://tempuri.org/">
-      <aesKey>' . $this->config['key'] . '</aesKey>
-      <aesVector>' . $this->config['iv'] . '</aesVector>
-      <toBeDecrypted>' . $string . '</toBeDecrypted>
-    </DecryptInAES>
-  </soap:Body>
-</soap:Envelope>';
+        $body = XmlBuilder::build('DecryptInAES', $data, [], ['xmlns' => 'http://tempuri.org/']);
+        $xml = XmlBuilder::soapEnvelope($body);
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'text/xml; charset=utf-8',
-                'SOAPAction' => $action,
-            ])->send('POST', $url, ['body' => $xml]);
+        $request = GatewayRequest::post('https://services.asanpardakht.net/paygate/internalutils.asmx', $xml)
+            ->asSoap('http://tempuri.org/DecryptInAES');
 
-            if ($response->failed()) {
-                throw new PaymentException("AsanPardakht Decryption Connection Error: " . $response->body());
-            }
+        $response = $this->sender->send($request);
+        $responseBody = $response->rawBody;
 
-            $responseBody = $response->body();
-            $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
-            $xmlObj = simplexml_load_string($cleanXml);
-
-            return (string)($xmlObj->Body->DecryptInAESResponse->DecryptInAESResult ?? '');
-        } catch (Exception $e) {
-            throw new PaymentException("AsanPardakht Decryption Error: " . $e->getMessage());
+        if (!$response->success) {
+            throw new PaymentException("AsanPardakht Decryption Connection Error: " . $responseBody);
         }
+
+        $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
+        $xmlObj = simplexml_load_string($cleanXml);
+
+        return (string)($xmlObj->Body->DecryptInAESResponse->DecryptInAESResult ?? '');
     }
 
     public function getTransactionId(): ?string

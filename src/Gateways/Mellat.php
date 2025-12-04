@@ -59,7 +59,7 @@ class Mellat implements PaymentGatewayInterface
         $code = $res[0];
 
         if ($code !== '0') {
-            throw new PaymentException("Mellat Initialization Error: {$code}");
+            throw new PaymentException("Mellat Initialization Error: $code");
         }
 
         $refId = $res[1];
@@ -105,7 +105,7 @@ class Mellat implements PaymentGatewayInterface
         $result = (string)($xmlObj->Body->bpVerifyRequestResponse->return ?? '');
 
         if ($result !== '0') {
-            throw new PaymentException("Mellat Verify Error: {$result}");
+            throw new PaymentException("Mellat Verify Error: $result");
         }
 
         // 2. Settle
@@ -132,7 +132,7 @@ class Mellat implements PaymentGatewayInterface
         $settleResult = (string)($xmlObjSettle->Body->bpSettleRequestResponse->return ?? '');
 
         if ($settleResult !== '0' && $settleResult !== '45') {
-            throw new PaymentException("Mellat Settle Error: {$settleResult}");
+            throw new PaymentException("Mellat Settle Error: $settleResult");
         }
 
         return [

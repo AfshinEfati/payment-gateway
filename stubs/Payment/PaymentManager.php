@@ -110,21 +110,42 @@ class PaymentManager
      */
     public function gateway(?string $name = null): PaymentGatewayInterface
     {
-        $name = $name ?: $this->getDefaultGateway();
+        $name = $name ?: $this->getDefaultDriver(); // Changed getDefaultGateway to getDefaultDriver
         $this->driverName = $name;
 
-        $binding = "payment.{$name}";
-
-        if (!$this->app->bound($binding)) {
-            throw new PaymentException("Gateway [{$name}] is not supported or not registered.");
+        // Check for custom bindings
+        $binding = "payment.$name";
+        if ($this->app->bound($binding)) {
+            return $this->app->make($binding);
         }
 
-        return $this->app->make($binding);
+        throw new PaymentException("Gateway [$name] is not supported or not registered.");
     }
 
-    public function getDefaultGateway(): string
+    public function getDefaultDriver()
     {
-        return $this->app['config']['payment.default'];
+        return $this->app['config']['payment.default'] ?? 'zarinpal';
+    }
+
+    public function getDriverName(): ?string
+    {
+        return $this->driverName;
+    }
+
+    public function hasDriver(string $method): bool
+    {
+        // This method was added from the provided snippet.
+        // The original class does not have customCreators or createXDriver methods.
+        // We'll adapt it to check for bound services or configured gateways.
+        if ($this->app->bound("payment.$method")) {
+            return true;
+        }
+
+        if (config("payment.gateways.$method")) {
+            return true;
+        }
+
+        return false;
     }
 
     public function __call($method, $parameters)
@@ -133,6 +154,10 @@ class PaymentManager
             return $this->driver($method);
         }
 
+        // The original method called $this->gateway()->$method(...$parameters);
+        // The new structure implies that if it's not a configured gateway,
+        // it might be a method on the default gateway.
+        // We'll keep the original behavior for non-driver calls.
         return $this->gateway()->$method(...$parameters);
     }
 }
