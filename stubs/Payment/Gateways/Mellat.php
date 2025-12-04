@@ -12,9 +12,9 @@ use App\Payment\Helpers\XmlBuilder;
 
 class Mellat implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
-    protected $sender;
+    protected array $config;
+    protected ?string $rawResponse = null;
+    protected RequestSender $sender;
 
     public function __construct(array $config)
     {
@@ -22,6 +22,9 @@ class Mellat implements PaymentGatewayInterface
         $this->sender = new RequestSender();
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $data = [
@@ -70,6 +73,9 @@ class Mellat implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $orderId = $dto->metadata['order_id'] ?? null;

@@ -7,22 +7,25 @@ use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use Illuminate\Http\Client\ConnectionException;
 
 class IDPay implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
+    protected array $config;
+    protected ?array $rawResponse = null;
 
     public function __construct(array $config)
     {
         $this->config = $config;
     }
 
+    /**
+     * @throws PaymentException
+     * @throws ConnectionException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
-        $url = $this->config['sandbox']
-            ? 'https://api.idpay.ir/v1.1/payment'
-            : 'https://api.idpay.ir/v1.1/payment';
+        $url = 'https://api.idpay.ir/v1.1/payment';
 
         $response = Http::withHeaders([
             'X-API-KEY' => $this->config['api_key'],
@@ -49,11 +52,13 @@ class IDPay implements PaymentGatewayInterface
         ];
     }
 
+    /**
+     * @throws PaymentException
+     * @throws ConnectionException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
-        $url = $this->config['sandbox']
-            ? 'https://api.idpay.ir/v1.1/payment/verify'
-            : 'https://api.idpay.ir/v1.1/payment/verify';
+        $url = 'https://api.idpay.ir/v1.1/payment/verify';
 
         $response = Http::withHeaders([
             'X-API-KEY' => $this->config['api_key'],

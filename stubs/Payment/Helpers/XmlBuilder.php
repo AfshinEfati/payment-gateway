@@ -10,17 +10,17 @@ class XmlBuilder
 
         $nsString = '';
         foreach ($namespaces as $prefix => $uri) {
-            $nsString .= " xmlns:{$prefix}=\"{$uri}\"";
+            $nsString .= ' xmlns:' . $prefix . '="' . $uri . '"';
         }
 
         $attrString = '';
         foreach ($attributes as $key => $value) {
-            $attrString .= " {$key}=\"{$value}\"";
+            $attrString .= ' ' . $key . '="' . $value . '"';
         }
 
-        $xml .= "<{$root}{$nsString}{$attrString}>";
+        $xml .= '<' . $root . $nsString . $attrString . '>';
         $xml .= self::arrayToXml($data);
-        $xml .= "</{$root}>";
+        $xml .= '</' . $root . '>';
 
         return $xml;
     }
@@ -48,12 +48,12 @@ class XmlBuilder
                         $xml .= self::arrayToXml($item);
                     }
                 } else {
-                    $xml .= "<{$key}>";
+                    $xml .= '<' . $key . '>';
                     $xml .= self::arrayToXml($value);
-                    $xml .= "</{$key}>";
+                    $xml .= '</' . $key . '>';
                 }
             } else {
-                $xml .= "<{$key}>" . htmlspecialchars((string)$value) . "</{$key}>";
+                $xml .= '<' . $key . '>' . htmlspecialchars((string)$value) . '</' . $key . '>';
             }
         }
         return $xml;

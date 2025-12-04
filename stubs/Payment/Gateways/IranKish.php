@@ -7,17 +7,21 @@ use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use Exception;
 
 class IranKish implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
+    protected array $config;
+    protected ?array $rawResponse = null;
 
     public function __construct(array $config)
     {
         $this->config = $config;
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $url = 'https://ikc.shaparak.ir/TToken/Tokens.svc';
@@ -50,17 +54,17 @@ class IranKish implements PaymentGatewayInterface
             }
 
             $responseBody = $response->body();
-            
+
             // Simple XML parsing
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
+
             // Navigate to result
             // Structure: Envelope -> Body -> MakeTokenResponse -> MakeTokenResult -> result (boolean) / message / token
             $result = $xmlObj->Body->MakeTokenResponse->MakeTokenResult ?? null;
 
             if (!$result) {
-                 throw new PaymentException("IranKish: Invalid response structure.");
+                throw new PaymentException("IranKish: Invalid response structure.");
             }
 
             $token = (string)$result->token;
@@ -75,12 +79,14 @@ class IranKish implements PaymentGatewayInterface
                 'url' => 'https://ikc.shaparak.ir/TPayment/Payment/Index/' . $token,
                 'token' => $token,
             ];
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new PaymentException("IranKish Error: " . $e->getMessage());
         }
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $url = 'https://ikc.shaparak.ir/TVerify/Verify.svc';
@@ -111,11 +117,11 @@ class IranKish implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
+
             $result = $xmlObj->Body->KicccPaymentsVerificationResponse->KicccPaymentsVerificationResult ?? null;
 
             if (!$result) {
-                 throw new PaymentException("IranKish: Invalid verification response.");
+                throw new PaymentException("IranKish: Invalid verification response.");
             }
 
             $responseCode = (string)$result->ResponseCode;
@@ -130,8 +136,7 @@ class IranKish implements PaymentGatewayInterface
                 'ref_id' => (string)$result->RetrievalReferenceNumber ?? $dto->authority,
                 'tracking_code' => (string)$result->SystemTraceAuditNumber ?? $dto->authority,
             ];
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new PaymentException("IranKish Verification Error: " . $e->getMessage());
         }
     }

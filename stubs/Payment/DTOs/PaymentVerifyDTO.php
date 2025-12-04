@@ -2,13 +2,13 @@
 
 namespace App\Payment\DTOs;
 
-class PaymentVerifyDTO
+readonly class PaymentVerifyDTO
 {
     public function __construct(
-        public readonly int $amount,
-        public readonly string $authority,
-        public readonly ?string $gateway = null,
-        public readonly array $metadata = [],
+        public int $amount,
+        public string $authority,
+        public ?string $gateway = null,
+        public array $metadata = [],
     ) {}
 
     public function toArray(): array

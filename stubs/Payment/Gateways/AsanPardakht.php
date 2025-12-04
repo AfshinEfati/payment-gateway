@@ -7,17 +7,21 @@ use App\Payment\Contracts\PaymentGatewayInterface;
 use App\Payment\DTOs\PaymentRequestDTO;
 use App\Payment\DTOs\PaymentVerifyDTO;
 use App\Payment\PaymentException;
+use Exception;
 
 class AsanPardakht implements PaymentGatewayInterface
 {
-    protected $config;
-    protected $rawResponse;
+    protected array $config;
+    protected ?array $rawResponse = null;
 
     public function __construct(array $config)
     {
         $this->config = $config;
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function initialize(PaymentRequestDTO $dto): array
     {
         $username = $this->config['username'];
@@ -59,11 +63,11 @@ class AsanPardakht implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
+
             $result = $xmlObj->Body->RequestOperationResponse->RequestOperationResult ?? null;
 
             if ($result === null) {
-                 throw new PaymentException("AsanPardakht: Invalid response structure.");
+                throw new PaymentException("AsanPardakht: Invalid response structure.");
             }
 
             $responseStr = (string)$result;
@@ -81,25 +85,27 @@ class AsanPardakht implements PaymentGatewayInterface
             } else {
                 throw new PaymentException("AsanPardakht initialization failed. Code: {$responseStr}");
             }
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new PaymentException("AsanPardakht Error: " . $e->getMessage());
         }
     }
 
+    /**
+     * @throws PaymentException
+     */
     public function verify(PaymentVerifyDTO $dto): array
     {
         $returningParams = $dto->metadata['ReturningParams'] ?? null;
 
         if (!$returningParams) {
-             throw new PaymentException("AsanPardakht: ReturningParams is missing.");
+            throw new PaymentException("AsanPardakht: ReturningParams is missing.");
         }
 
         $decryptedParams = $this->decrypt($returningParams);
         $retArr = explode(",", $decryptedParams);
 
         if (count($retArr) < 8) {
-             throw new PaymentException("AsanPardakht: Invalid ReturningParams format.");
+            throw new PaymentException("AsanPardakht: Invalid ReturningParams format.");
         }
 
         $amount = $retArr[0];
@@ -109,7 +115,7 @@ class AsanPardakht implements PaymentGatewayInterface
         $resMessage = $retArr[4];
         $payGateTranID = $retArr[5];
         $rrn = $retArr[6];
-        
+
         $this->rawResponse = ['decrypted_params' => $retArr];
 
         if ($resCode != '0' && $resCode != '00') {
@@ -146,7 +152,7 @@ class AsanPardakht implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
+
             $verifyResult = (string)($xmlObj->Body->RequestVerificationResponse->RequestVerificationResult ?? '');
 
             if ($verifyResult != '500') {
@@ -174,11 +180,11 @@ class AsanPardakht implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
+
             $settleResult = (string)($xmlObj->Body->RequestReconciliationResponse->RequestReconciliationResult ?? '');
 
             if ($settleResult != '600') {
-                 throw new PaymentException("AsanPardakht Settlement Failed. Code: {$settleResult}");
+                throw new PaymentException("AsanPardakht Settlement Failed. Code: {$settleResult}");
             }
 
             return [
@@ -186,12 +192,14 @@ class AsanPardakht implements PaymentGatewayInterface
                 'ref_id' => $refId,
                 'tracking_code' => $rrn,
             ];
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new PaymentException("AsanPardakht Connection Error: " . $e->getMessage());
         }
     }
 
+    /**
+     * @throws PaymentException
+     */
     protected function encrypt($string)
     {
         $url = 'https://services.asanpardakht.net/paygate/internalutils.asmx';
@@ -221,14 +229,16 @@ class AsanPardakht implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
-            return (string)($xmlObj->Body->EncryptInAESResponse->EncryptInAESResult ?? '');
 
-        } catch (\Exception $e) {
+            return (string)($xmlObj->Body->EncryptInAESResponse->EncryptInAESResult ?? '');
+        } catch (Exception $e) {
             throw new PaymentException("AsanPardakht Encryption Error: " . $e->getMessage());
         }
     }
 
+    /**
+     * @throws PaymentException
+     */
     protected function decrypt($string)
     {
         $url = 'https://services.asanpardakht.net/paygate/internalutils.asmx';
@@ -258,10 +268,9 @@ class AsanPardakht implements PaymentGatewayInterface
             $responseBody = $response->body();
             $cleanXml = str_ireplace(['soap:', 's:', 'xmlns:'], '', $responseBody);
             $xmlObj = simplexml_load_string($cleanXml);
-            
-            return (string)($xmlObj->Body->DecryptInAESResponse->DecryptInAESResult ?? '');
 
-        } catch (\Exception $e) {
+            return (string)($xmlObj->Body->DecryptInAESResponse->DecryptInAESResult ?? '');
+        } catch (Exception $e) {
             throw new PaymentException("AsanPardakht Decryption Error: " . $e->getMessage());
         }
     }

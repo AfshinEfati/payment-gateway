@@ -2,16 +2,16 @@
 
 namespace App\Payment\DTOs;
 
-class PaymentRequestDTO
+readonly class PaymentRequestDTO
 {
     public function __construct(
-        public readonly int $amount,
-        public readonly string $orderId,
-        public readonly string $callbackUrl,
-        public readonly ?string $description = null,
-        public readonly ?string $mobile = null,
-        public readonly ?string $email = null,
-        public readonly array $metadata = [],
+        public int $amount,
+        public string $orderId,
+        public string $callbackUrl,
+        public ?string $description = null,
+        public ?string $mobile = null,
+        public ?string $email = null,
+        public array $metadata = [],
     ) {}
 
     public function toArray(): array
